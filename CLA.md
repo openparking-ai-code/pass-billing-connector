@@ -12,7 +12,7 @@ You keep the copyright in what you write. Nothing here takes it from you.
 ## 1. Definitions
 
 **"Project"** means Open Parking AI and its repositories under the
-`openparking-ai-code` GitHub organization.
+`openparking-ai` GitHub organization.
 
 **"Owner"** means 72 Knots, the maintainer of the Project.
 
