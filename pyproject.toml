@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openparking-pass-billing-connector"
+version = "0.1.0"
+description = "Open Parking AI pass-billing connector — make monthly billing's register for an outside-registrar agreement equal a garage pass's live register, and say loudly whatever cannot be made equal"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+# Standard library only, and it will stay that way. The connector has NO
+# DATABASE: it drives the two modules through their command lines as
+# subprocesses and reads what they print. There is no driver here to install,
+# no DSN of its own to read, and no table of its own to keep consistent with
+# the two it reconciles. tests/test_c3_the_command_lines_are_the_only_door.py
+# is what enforces that, from the source and from this file.
+dependencies = []
+
+[project.optional-dependencies]
+# The two modules, PINNED to the commits the connector was built against and
+# installed for the tests only. At runtime the connector needs the two console
+# scripts on PATH and nothing else; it imports neither package. The test
+# harness reads these two lines for the commits whose migrations it applies
+# (tests/harness.py), so the pin is stated in exactly one place.
+dev = [
+  "pytest>=8",
+  "ruff>=0.8",
+  "openparking-garage-pass[store] @ git+https://github.com/openparking-ai-code/garage-pass@3b850a7bfd28d25648a8d8fffdfad6242ca33882",
+  "openparking-monthly-billing[store] @ git+https://github.com/openparking-ai-code/monthly-billing@0e911a86237a5f1662318fe024f892500c64b44e",
+]
+
+[project.scripts]
+pass-billing-connector = "pass_billing_connector.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+markers = [
+  # A test that proves one of the guarantees docs/CONTRACT.md states. CI fails
+  # when one of these skips without its reason being declared, because a
+  # guarantee whose test can quietly not run is not a guarantee.
+  #
+  # The identifier is not decoration: tests/_guarantees.py holds the canonical
+  # registry, conftest requires every registered id to have RUN, and
+  # docs/CONTRACT.md is generated from the same registry. One source, three
+  # consumers -- so a guarantee cannot be dropped from any of them silently.
+  "guarantee(id): proves a registered guarantee; may not skip silently",
+  # Needs a Postgres cluster the harness may create two databases in, one per
+  # module, each migrated from its pinned commit. This is the ONE allowance in
+  # the suite, and it is named here rather than left as a bare skipif: the
+  # guarantees it carries are about what the two modules actually do when
+  # driven, and there is no way to measure that without them. CI always
+  # provides the cluster, so CI never skips it.
+  "needs_postgres: requires PASS_BILLING_CONNECTOR_TEST_DSN to point at a cluster",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

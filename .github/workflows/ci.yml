@@ -1,0 +1,284 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history, as emails.yml already does and for the same reason.
+          # The sibling-name guard below reads COMMIT MESSAGES as well as files.
+          # At the default depth of 1 a pull-request checkout is one synthetic
+          # merge commit, so the guard's commit half saw nothing and passed --
+          # measured in monthly-billing: depth 1 sees 1 commit, full depth
+          # sees the branch.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -e '.[dev]'
+      - run: ruff check .
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+
+      - name: No real personal data in the repository
+        # The self-test first: before trusting the result, prove the check can
+        # fail. It plants a real-looking address and requires a rejection.
+        run: |
+          node .github/scripts/check-no-real-data.js --self-test
+          node .github/scripts/check-no-real-data.js
+
+      - name: No name from the maintainer's other software (self-test)
+        # Same shape, and the same reason. This guard holds its forbidden words
+        # as digests rather than spelling them, so its self-test proves the
+        # MECHANISM -- see the script's header for what that does and does not
+        # establish. It also asserts the attribution line is PRESENT.
+        run: node .github/scripts/check-no-sibling-names.js --self-test
+
+      - name: No name from the maintainer's other software (this pull request)
+        # The tracked files, plus every commit message the pull request would
+        # bring in -- the range, not whatever HEAD happens to be. Without the
+        # range the guard scans the checkout's own log, which is one commit.
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node .github/scripts/check-no-sibling-names.js "$BASE..$HEAD"
+
+      - name: No name from the maintainer's other software (whole history)
+        if: github.event_name != 'pull_request'
+        run: node .github/scripts/check-no-sibling-names.js
+
+      - name: No name from the maintainer's other software (working tree)
+        # Tracked and untracked files, contents and paths, and every commit
+        # message. Plants its own controls -- a word in a file, a word in a
+        # file's name -- and requires each caught, in the same run, before the
+        # real scan is read.
+        run: node .github/scripts/check-no-sibling-names.js --worktree
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # The lowest version supported and a current one. Nothing here may
+        # quietly depend on a newer interpreter than an integrator's.
+        python-version: ['3.11', '3.12']
+
+    services:
+      postgres:
+        # ONE CLUSTER, in which the harness creates TWO databases -- one per
+        # module, each migrated from its pinned commit -- and drives them
+        # through the two command lines. The connector under test has no
+        # database; the two it reconciles are real. This service is what stops
+        # those guarantees skipping -- see the allowance note on the suite step.
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: pip install -e '.[dev]'
+
+      - name: The connector has no dependencies, and that is a published claim
+        # `pip install -e .` with no extras must leave nothing but the package
+        # itself. A database driver arriving here would be the connector
+        # growing a database, and the README says it has none. The `dev` extra
+        # is exempt BY NAME rather than by the check being loose: the two
+        # modules and their drivers belong there, for the tests, and nowhere
+        # else.
+        run: |
+          python - <<'PY'
+          import importlib.metadata as md
+          requires = md.distribution("openparking-pass-billing-connector").requires or []
+          runtime = [r for r in requires if "extra ==" not in r]
+          assert runtime == [], f"the runtime dependency list is no longer empty: {runtime}"
+          extras = sorted({
+              r.split("extra ==")[1].strip().strip('"\'')
+              for r in requires if "extra ==" in r
+          })
+          assert extras == ["dev"], f"unexpected extras: {extras}"
+          print("no runtime dependencies, as published")
+          PY
+
+      - name: The suite
+        # NO ALLOWANCE IS NAMED, deliberately. PASS_BILLING_CONNECTOR_ALLOW_UNRUN
+        # is the only way a registered guarantee may finish a run unproven, and
+        # it is empty here -- so a guarantee whose test did not run and pass
+        # fails this step. The cluster above is what makes that possible for
+        # the database-driven guarantees, which would otherwise skip.
+        env:
+          PASS_BILLING_CONNECTOR_TEST_DSN: >-
+            host=localhost port=5432 dbname=postgres
+            user=postgres password=postgres
+        run: pytest -q
+
+      - name: The database tests really ran, rather than skipping
+        # The step above fails on an unrun GUARANTEE. This is the narrower check
+        # on the same thing, and it exists because the two failure modes look
+        # identical from a green tick: a skipped database test and a passing one
+        # both leave the suite green if the guarantee guard is ever loosened.
+        env:
+          PASS_BILLING_CONNECTOR_TEST_DSN: >-
+            host=localhost port=5432 dbname=postgres
+            user=postgres password=postgres
+        run: |
+          set -o pipefail
+          pytest -q -m needs_postgres | tee "$RUNNER_TEMP/db.txt"
+          grep -qE '[0-9]+ passed' "$RUNNER_TEMP/db.txt"
+          if grep -q 'skipped' "$RUNNER_TEMP/db.txt"; then
+            echo "a database test skipped, so the guarantees it carries are unproven:"
+            cat "$RUNNER_TEMP/db.txt"; exit 1
+          fi
+
+      - name: The command line works with nothing but this package and the two scripts
+        # The definition of done for a connector, as a check: the installed
+        # script answers. BOTH refusals are asserted -- the connector's own
+        # (exit 2, a sentence, no report) and a module's (exit 1, a report
+        # naming the module's words) -- because a check that only ever runs
+        # the happy path cannot tell a working refusal from one that reports
+        # nothing. No DSN is set here on purpose: the module's configuration
+        # sentence is what the second run must carry.
+        run: |
+          set -o pipefail
+          echo '{"links": []}' > "$RUNNER_TEMP/empty.json"
+          pass-billing-connector sync --links "$RUNNER_TEMP/empty.json" \
+            --at 2026-09-16T09:00:00-06:00 | tee "$RUNNER_TEMP/empty.txt"
+          grep -q '"converged": true' "$RUNNER_TEMP/empty.txt"
+
+          set +e
+          pass-billing-connector sync --links "$RUNNER_TEMP/empty.json" \
+            --at 2026-09-16T09:00:00 2> "$RUNNER_TEMP/naive.txt"
+          naive_exit=$?
+          set -e
+          test "$naive_exit" = 2 || { echo "a naive instant did not exit 2"; exit 1; }
+          grep -q "offset" "$RUNNER_TEMP/naive.txt"
+
+          cat > "$RUNNER_TEMP/one.json" <<'JSON'
+          {"links": [{"pass_tenant": "11111111-1111-1111-1111-111111111111", "pass_id": "p",
+                      "pass_garage": "g", "billing_tenant": "22222222-2222-2222-2222-222222222222",
+                      "agreement_id": "a"}]}
+          JSON
+          set +e
+          pass-billing-connector sync --links "$RUNNER_TEMP/one.json" \
+            --at 2026-09-16T09:00:00-06:00 > "$RUNNER_TEMP/one.txt"
+          one_exit=$?
+          set -e
+          test "$one_exit" = 1 || { echo "a link no module can answer did not exit 1"; exit 1; }
+          grep -q "GARAGE_PASS_CONFIGURATION" "$RUNNER_TEMP/one.txt"
+          grep -q "MONTHLY_BILLING_CONFIGURATION" "$RUNNER_TEMP/one.txt"
+          grep -q "GARAGE_PASS_DSN is not set" "$RUNNER_TEMP/one.txt"
+          echo "the connector answered, and refused, for the right reasons"
+
+  controls:
+    name: controls
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # The database-driven controls plant into the connector and run the
+        # tests that drive the two modules, so they need the same cluster the
+        # suite does. Without it those targets all SKIP, the control cannot
+        # fire, and fail_controls.py reports it DEAD and exits 1 -- so the run
+        # fails rather than passing quietly. See the note in
+        # scripts/fail_controls.py.
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -e '.[dev]'
+
+      - name: Anchor pre-flight
+        # Each fail-control plants a string into a source file. Editing the line
+        # an anchor sits on silently retires the control that depends on it, and
+        # the suite then passes while the control measures nothing. This answers
+        # that whole failure mode in a second, before the controls themselves
+        # run -- and it is a separate step so a failure here is visible as one.
+        run: python scripts/fail_controls.py --anchors
+
+      - name: Every guarantee, proven able to FAIL
+        # Breaks the thing each guarantee guards and requires red. No count is
+        # written here on purpose: the script derives the set from
+        # tests/_guarantees.py and refuses to run if a guarantee has no control,
+        # so a number in this comment could only ever go stale.
+        env:
+          PASS_BILLING_CONNECTOR_TEST_DSN: >-
+            host=localhost port=5432 dbname=postgres
+            user=postgres password=postgres
+        run: python scripts/fail_controls.py
+
+      - name: The working tree is unchanged after every defect was planted
+        # Every plant restores in a `finally` and verifies the bytes. This is the
+        # independent check on that: a control that left a defect behind would
+        # otherwise be discovered by whatever ran next.
+        run: git diff --exit-code
+
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -e '.[dev]'
+
+      - name: Every published figure AND SENTENCE is still the generated one
+        # docs/CONTRACT.md's marked blocks are DERIVED -- the guarantees from the
+        # test registry, the pins from pyproject.toml, the module's registries
+        # from its source. No database is needed: nothing in the contract is
+        # produced by running a store. A number or a sentence edited by hand
+        # turns this red.
+        run: |
+          python scripts/generate_contract.py --check
+          git diff --exit-code docs/CONTRACT.md
+
+      - name: Generation is not verification
+        # The step above proves the document matches the generator. It cannot
+        # prove the generator DERIVES anything -- a template whose prose is fixed
+        # everywhere except the holes agrees with itself perfectly. These tests
+        # plant values that contradict the prose and require the prose to change.
+        run: |
+          set -o pipefail
+          pytest tests/test_contract_is_generated.py -q | tee "$RUNNER_TEMP/docs.txt"
+          if grep -q 'skipped' "$RUNNER_TEMP/docs.txt"; then
+            echo "a contract plant skipped, so the derivation is unproven:"; exit 1
+          fi

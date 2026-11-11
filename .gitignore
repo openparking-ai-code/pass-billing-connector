@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+node_modules/
+# The pinned modules' migration files, fetched by the test harness from the
+# pinned commits (tests/harness.py). Derived, never edited, never committed.
+.pins/
+.ruff_cache/
