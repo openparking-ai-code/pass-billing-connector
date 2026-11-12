@@ -103,7 +103,7 @@ CONTROLS: dict[str, tuple[str, str, str, str, str]] = {
         "scripts/generate_contract.py",
         '            rows.append(f"| `{match.group(1)}` | `{match.group(3)}` |")',
         source(
-            "            typed = '253249b5eb52770ec14d026f04f2c39749b75530'  # PLANTED",
+            "            typed = '80dd0b89bc825002c4e9788a8bba582f3d524663'  # PLANTED",
             '            rows.append(f"| `{match.group(1)}` | `{typed}` |")',
         ),
         "the pinned commit in the contract stops being read from pyproject.toml and "
@@ -150,7 +150,7 @@ CONTROLS: dict[str, tuple[str, str, str, str, str]] = {
     "C3/pin": (
         "tests/test_c3_the_command_lines_are_the_only_door.py",
         "pyproject.toml",
-        "garage-pass@253249b5eb52770ec14d026f04f2c39749b75530",
+        "garage-pass@80dd0b89bc825002c4e9788a8bba582f3d524663",
         "garage-pass@0000000000000000000000000000000000000000",
         "pyproject.toml pins a commit the installed package is not: the suite "
         "would then measure one commit and the contract name another",

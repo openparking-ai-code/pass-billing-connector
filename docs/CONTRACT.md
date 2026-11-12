@@ -18,8 +18,8 @@ live register, and say loudly whatever cannot be made equal.
 <!-- GENERATED:pins -->
 | module | commit |
 |---|---|
-| `garage-pass` | `253249b5eb52770ec14d026f04f2c39749b75530` |
-| `monthly-billing` | `447f83c312158c0687b243756378b2d8be1b454f` |
+| `garage-pass` | `80dd0b89bc825002c4e9788a8bba582f3d524663` |
+| `monthly-billing` | `4fdc6d4d66066031bb25a28287870749a0ff8e49` |
 
 2 modules are pinned, as a DEV dependency for the tests. At runtime the connector needs the two console scripts on PATH and imports neither package; the runtime dependency list is empty.
 <!-- END:pins -->

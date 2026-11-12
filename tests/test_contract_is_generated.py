@@ -87,12 +87,12 @@ def test_a_pin_moved_in_pyproject_moves_the_document():
     before = rendered()
     with planted(
         "pyproject.toml",
-        "garage-pass@253249b5eb52770ec14d026f04f2c39749b75530",
+        "garage-pass@80dd0b89bc825002c4e9788a8bba582f3d524663",
         "garage-pass@0000000000000000000000000000000000000000",
     ):
         after = rendered()
     assert "0000000000000000000000000000000000000000" in after
-    assert "253249b5eb52770ec14d026f04f2c39749b75530" in before
+    assert "80dd0b89bc825002c4e9788a8bba582f3d524663" in before
 
 
 @pytest.mark.guarantee("C2")

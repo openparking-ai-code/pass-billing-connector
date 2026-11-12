@@ -62,7 +62,7 @@ def block_pins() -> str:
     found = 0
     for requirement in project["optional-dependencies"]["dev"]:
         match = re.fullmatch(
-            r"openparking-([a-z-]+)\[store\] @ git\+https://github\.com/openparking-ai/"
+            r"openparking-([a-z-]+)\[store\] @ git\+https://github\.com/openparking-ai-code/"
             r"([a-z-]+)@([0-9a-f]{40})",
             requirement,
         )

@@ -96,7 +96,7 @@ def pinned_commits() -> dict[str, str]:
     for requirement in project["optional-dependencies"]["dev"]:
         found = re.fullmatch(
             r"openparking-(garage-pass|monthly-billing)\[store\] @ "
-            r"git\+https://github\.com/openparking-ai/(garage-pass|monthly-billing)@([0-9a-f]{40})",
+            r"git\+https://github\.com/openparking-ai-code/(garage-pass|monthly-billing)@([0-9a-f]{40})",
             requirement,
         )
         if found:
