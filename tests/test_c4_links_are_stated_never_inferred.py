@@ -156,7 +156,7 @@ def test_the_access_key_is_not_a_scope(pair, monkeypatch):
     pair.gp_register("pass-1", "garage-a", "AB-123", "2026-09-01")
     code, report = pair.sync([pair.link(pass_garage="garage-b")], AT, monkeypatch=monkeypatch)
     assert code == 0, report
-    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB-123")}
+    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB123")}
 
 
 @needs_databases
@@ -173,5 +173,5 @@ def test_both_modules_read_a_tenant_in_capitals_as_the_same_tenant(pair, monkeyp
     assert capitals["billing_tenant"] != pair.mb_tenant
     code, report = pair.sync([capitals], AT, monkeypatch=monkeypatch)
     assert code == 0, report
-    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB-123")}
+    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB123")}
 

@@ -127,11 +127,12 @@ def test_at_the_real_doors_the_asymmetric_state_exits_1_and_releases_nothing(
     pair.gp_register("pass-1", "garage-a", "AB-123", "2026-09-01")
     code, _ = pair.sync([pair.link()], AT, monkeypatch=monkeypatch)
     assert code == 0
-    both = {("garage-a", "ab123"), ("garage-b", "AB-123")}
+    # garage-pass holds the plate in its one normal form, AB123.
+    both = {("garage-a", "ab123"), ("garage-b", "AB123")}
     assert pair.mb_rows("ag-1") == both
 
     if when == "before the run":
-        _delete_row_past_the_door(pair, "garage-b", "AB-123")
+        _delete_row_past_the_door(pair, "garage-b", "AB123")
     else:
         real_show_pass = sync_module.doors.show_pass
         calls = {"n": 0}
@@ -139,7 +140,7 @@ def test_at_the_real_doors_the_asymmetric_state_exits_1_and_releases_nothing(
         def show_pass_then_delete(tenant, garage, pass_id):
             calls["n"] += 1
             if calls["n"] == 2:   # the final read, after the writes
-                _delete_row_past_the_door(pair, "garage-b", "AB-123")
+                _delete_row_past_the_door(pair, "garage-b", "AB123")
             return real_show_pass(tenant, garage, pass_id)
 
         monkeypatch.setattr(sync_module.doors, "show_pass", show_pass_then_delete)
@@ -148,9 +149,9 @@ def test_at_the_real_doors_the_asymmetric_state_exits_1_and_releases_nothing(
     assert code == 1
     (one,) = report["links"]
     assert one["converged"] is False
-    assert one["live"] == {"garage-a": ["AB-123"], "garage-b": []}
+    assert one["live"] == {"garage-a": ["AB123"], "garage-b": []}
     (finding,) = [f for f in one["findings"] if f["code"] == CODE]
-    assert finding["identity"] == "AB-123"
+    assert finding["identity"] == "AB123"
     assert "live at ['garage-a'] and not at ['garage-b']" in finding["detail"]
     expected_codes = [CODE] if when == "before the run" else ["PASS_CHANGED_DURING_RUN", CODE]
     assert [f["code"] for f in one["findings"]] == expected_codes

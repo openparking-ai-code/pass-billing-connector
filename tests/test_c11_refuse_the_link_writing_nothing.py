@@ -174,7 +174,7 @@ def test_a_wrong_garage_pass_tenant_is_garage_pass_own_refusal_never_an_empty_re
     wrong = pair.link(pass_tenant="00000000-0000-0000-0000-000000000001")
     finding = _one_refusal(pair, monkeypatch, wrong, "GARAGE_PASS_REFUSED")
     assert "REFUSAL_GARAGE_NOT_FOUND" in finding["detail"]
-    assert pair.mb_rows("ag-1") == {("garage-a", "wouldgo"), ("garage-b", "Would-Go")}
+    assert pair.mb_rows("ag-1") == {("garage-a", "w0uldg0"), ("garage-b", "Would-Go")}
 
 
 @needs_databases
@@ -210,7 +210,7 @@ def test_a_covered_set_the_doors_line_cannot_tell_apart_refuses_by_name(pair, mo
     pair.gp_register("pass-1", "g", "AB-123", "2026-09-01")
     pair.mb_register("ag-1", "Foreign 9")
     before = pair.mb_rows("ag-1")
-    assert before == {("g", "foreign9"), ("g: 2", "Foreign 9")}
+    assert before == {("g", "f0re1gn9"), ("g: 2", "Foreign 9")}
     finding = _one_refusal(pair, monkeypatch, pair.link(pass_garage="g"), "GARAGE_IDS_AMBIGUOUS")
     assert finding["garage"] == "g: 2"
     assert pair.mb_rows("ag-1") == before

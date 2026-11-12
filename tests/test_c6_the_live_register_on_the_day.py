@@ -145,16 +145,18 @@ def test_starting_tomorrow_and_ending_today_on_both_sides_of_the_boundary(pair, 
     pair.gp_register("pass-1", "garage-a", "ENDS-TOMORROW", "2026-09-01", "2026-09-17")
     code, _ = pair.sync([pair.link()], AT, monkeypatch=monkeypatch)
     assert code == 0
-    assert pair.mb_rows("ag-1") == {("garage-a", "endstomorrow"), ("garage-b", "ENDS-TOMORROW")}
+    # garage-pass hands out each plate in its one normal form (capitals, no
+    # dash, O read as 0 and I as 1); billing's folded garage folds that again.
+    assert pair.mb_rows("ag-1") == {("garage-a", "endst0m0rr0w"), ("garage-b", "ENDST0M0RR0W")}
     # The day after: TOMORROW-1 is live, ENDS-TOMORROW is free.
     code, _ = pair.sync([pair.link()], "2026-09-17T09:00:00-06:00", monkeypatch=monkeypatch)
     assert code == 0
-    assert pair.mb_rows("ag-1") == {("garage-a", "tomorrow1"), ("garage-b", "TOMORROW-1")}
+    assert pair.mb_rows("ag-1") == {("garage-a", "t0m0rr0w1"), ("garage-b", "T0M0RR0W1")}
     # The day before: only ENDS-TODAY and ENDS-TOMORROW were live.
     code, _ = pair.sync([pair.link()], "2026-09-15T09:00:00-06:00", monkeypatch=monkeypatch)
     assert code == 0
-    assert pair.mb_rows("ag-1") == {("garage-a", "endstoday"), ("garage-b", "ENDS-TODAY"),
-                                    ("garage-a", "endstomorrow"), ("garage-b", "ENDS-TOMORROW")}
+    assert pair.mb_rows("ag-1") == {("garage-a", "endst0day"), ("garage-b", "ENDST0DAY"),
+                                    ("garage-a", "endst0m0rr0w"), ("garage-b", "ENDST0M0RR0W")}
 
 
 @needs_databases
@@ -164,7 +166,7 @@ def test_a_suspended_or_revoked_pass_keeps_no_car_in_billing(pair, monkeypatch, 
     standard_world(pair)
     pair.gp_register("pass-1", "garage-a", "AB-123", "2026-09-01")
     code, _ = pair.sync([pair.link()], AT, monkeypatch=monkeypatch)
-    assert code == 0 and pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB-123")}
+    assert code == 0 and pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB123")}
     pair.gp_state("pass-1", "garage-a", state, "2026-09-16T08:00:00-06:00")
     code, report = pair.sync([pair.link()], AT, monkeypatch=monkeypatch)
     assert code == 0, report
@@ -180,7 +182,7 @@ def test_a_pass_past_its_valid_to_has_an_empty_register(pair, monkeypatch):
     standard_world(pair, valid_from="2026-01-01", valid_to="2026-09-15")
     pair.gp_register("pass-1", "garage-a", "AB-123", "2026-09-01")
     code, _ = pair.sync([pair.link()], "2026-09-15T09:00:00-06:00", monkeypatch=monkeypatch)
-    assert code == 0 and pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB-123")}
+    assert code == 0 and pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB123")}
     code, report = pair.sync([pair.link()], AT, monkeypatch=monkeypatch)  # 09-16: past valid_to
     assert code == 0, report
     assert pair.mb_rows("ag-1") == set()
@@ -218,30 +220,34 @@ def test_a_car_replaced_on_the_pass_leaves_billing_and_keeps_garage_pass_exit(pa
     for it are the same before and after the run."""
     standard_world(pair)
     pair.gp_enrols_at("garage-a", "entry")
-    old = pair.gp_issue_qr("pass-1", "garage-a", "qr-1", "2026-09-01")
+    old = pair.gp_issue_qr("pass-1", "garage-a", "qr-1", "2026-09-01", "CAR-OLD")
     pair.gp_redeem("garage-a", old, "CAR-OLD", "2026-09-01T09:00:00-06:00")
     code, _ = pair.sync([pair.link()], "2026-09-05T09:00:00-06:00", monkeypatch=monkeypatch)
     assert code == 0
-    assert pair.mb_rows("ag-1") == {("garage-a", "carold"), ("garage-b", "CAR-OLD")}
+    # garage-pass's one normal form: CAR-OLD is held as CAR0LD (O read as 0).
+    assert pair.mb_rows("ag-1") == {("garage-a", "car0ld"), ("garage-b", "CAR0LD")}
 
-    new = pair.gp_replace_car("garage-a", "qr-1", "qr-2", "2026-09-10")
+    new = pair.gp_replace_car("garage-a", "qr-1", "qr-2", "2026-09-10", "CAR-NEW")
     pair.gp_redeem("garage-a", new, "CAR-NEW", "2026-09-10T09:00:00-06:00")
     # garage-pass keeps the old car's registration open: only its QR changed.
+    # Each registration a QR made runs for that QR's own days (30 from its
+    # first day), and the replacement did not end the old one early.
     rows = pair.gp_show("pass-1", "garage-a")["registrations"]
     assert {(r["vehicle_identity"], r["end_day"]) for r in rows} == {
-        ("CAR-OLD", None), ("CAR-NEW", None)}
+        ("CAR0LD", "2026-10-01"), ("CARNEW", "2026-10-10")}
     before = _pass_answers(pair, "CAR-OLD")
     assert before == {"entry": "not_covered", "exit": "covered"}, before
 
     code, report = pair.sync([pair.link()], AT, monkeypatch=monkeypatch)
     assert code == 0, report
     (one,) = report["links"]
-    assert one["live"] == {"garage-a": ["CAR-NEW"], "garage-b": ["CAR-NEW"]}
-    assert pair.mb_rows("ag-1") == {("garage-a", "carnew"), ("garage-b", "CAR-NEW")}
+    assert one["live"] == {"garage-a": ["CARNEW"], "garage-b": ["CARNEW"]}
+    assert pair.mb_rows("ag-1") == {("garage-a", "carnew"), ("garage-b", "CARNEW")}
     assert [(a["action"], a.get("identity") or a.get("form"), a["garage"])
             for a in one["actions"]] == [
-        ("register", "CAR-NEW", None), ("release", "carold", "garage-a"),
-        ("release", "CAR-OLD", "garage-b")]
-    assert _covered(pair, "CAR-OLD") == {"garage-a": 1, "garage-b": 1}
-    assert _covered(pair, "CAR-NEW") == {"garage-a": 0, "garage-b": 0}
+        ("register", "CARNEW", None), ("release", "car0ld", "garage-a"),
+        ("release", "CAR0LD", "garage-b")]
+    # Billing is asked about each car in the form garage-pass hands it out in.
+    assert _covered(pair, "CAR0LD") == {"garage-a": 1, "garage-b": 1}
+    assert _covered(pair, "CARNEW") == {"garage-a": 0, "garage-b": 0}
     assert _pass_answers(pair, "CAR-OLD") == before

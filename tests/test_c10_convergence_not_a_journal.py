@@ -89,13 +89,13 @@ def test_a_run_killed_between_the_registers_and_the_releases_is_repaired_by_the_
         pair.sync([pair.link()], AT, monkeypatch=monkeypatch)
     assert killed["count"] == 1
     # Half-way: the register landed, the release did not.
-    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB-123"),
+    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB123"),
                                     ("garage-a", "stale1"), ("garage-b", "Stale 1")}
 
     monkeypatch.setattr(sync_module.doors, "release_vehicle", real_release)
     code, report = pair.sync([pair.link()], AT, monkeypatch=monkeypatch)
     assert code == 0, report
-    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB-123")}
+    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB123")}
 
 
 @needs_databases

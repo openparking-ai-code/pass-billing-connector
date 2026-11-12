@@ -681,13 +681,14 @@ def test_a_car_held_by_another_agreement_is_recorded_and_named_exit_1(pair, monk
     (one,) = report["links"]
     assert one["converged"] is False
     refused = [a for a in one["actions"] if a["outcome"] == "refused"]
-    assert [a["identity"] for a in refused] == ["held 1"]
+    # garage-pass hands out "held 1" in its one normal form.
+    assert [a["identity"] for a in refused] == ["HELD1"]
     assert "REFUSAL_VEHICLE_ALREADY_REGISTERED" in refused[0]["detail"]
     assert "ag-2" in refused[0]["detail"]
     unknown = [f for f in one["findings"] if f["code"] == "STORED_FORM_UNKNOWN"]
-    assert [f["identity"] for f in unknown] == ["held 1"]
+    assert [f["identity"] for f in unknown] == ["HELD1"]
     # The other car converged on its own: the final read holds it.
-    assert pair.mb_rows("ag-1") == {("garage-a", "free2"), ("garage-b", "FREE-2")}
+    assert pair.mb_rows("ag-1") == {("garage-a", "free2"), ("garage-b", "FREE2")}
     assert [f["code"] for f in one["findings"] if f["code"] == "DIVERGENCE"] == []
     # And the unanswered register stopped the releases: none was made.
     assert [a for a in one["actions"] if a["action"] == "release"] == []
@@ -720,13 +721,13 @@ def test_a_car_moving_between_two_linked_passes_does_not_hold_up_the_other_relea
     link_b = pair.link("pass-b", agreement_id="ag-b")
     code, _ = pair.sync([link_b, link_a], "2026-09-10T09:00:00-06:00", monkeypatch=monkeypatch)
     assert code == 0
-    assert pair.mb_rows("ag-a") == {("garage-a", "carx"), ("garage-b", "CAR-X")}
-    assert pair.mb_rows("ag-b") == {("garage-a", "carz"), ("garage-b", "CAR-Z")}
+    assert pair.mb_rows("ag-a") == {("garage-a", "carx"), ("garage-b", "CARX")}
+    assert pair.mb_rows("ag-b") == {("garage-a", "carz"), ("garage-b", "CARZ")}
 
     code, report = pair.sync([link_b, link_a], AT, monkeypatch=monkeypatch)
     assert code == 0, report
     assert pair.mb_rows("ag-a") == set()
-    assert pair.mb_rows("ag-b") == {("garage-a", "carx"), ("garage-b", "CAR-X")}
+    assert pair.mb_rows("ag-b") == {("garage-a", "carx"), ("garage-b", "CARX")}
     one_b, one_a = report["links"]
     assert one_a["converged"] is True and one_b["converged"] is True
     assert one_b["findings"] == []
@@ -734,10 +735,10 @@ def test_a_car_moving_between_two_linked_passes_does_not_hold_up_the_other_relea
     # attempt's register and releases.
     assert [(a["action"], a.get("identity") or a.get("form"), a["outcome"])
             for a in one_b["actions"]] == [
-        ("register", "CAR-X", "refused"),
-        ("register", "CAR-X", "done"),
+        ("register", "CARX", "refused"),
+        ("register", "CARX", "done"),
         ("release", "carz", "done"),
-        ("release", "CAR-Z", "done"),
+        ("release", "CARZ", "done"),
     ]
     assert "ag-a" in one_b["actions"][0]["detail"]
 
@@ -756,8 +757,8 @@ def test_every_register_and_release_is_in_the_report_with_its_reason(pair, monke
         ("release", "billing holds this form; no live identity stores in it", "done", "garage-a"),
         ("release", "billing holds this form; no live identity stores in it", "done", "garage-b"),
     ]
-    assert one["actions"][0]["identity"] == "AB-123"
-    assert [a["form"] for a in one["actions"][1:]] == ["foreign9", "Foreign 9"]
+    assert one["actions"][0]["identity"] == "AB123"
+    assert [a["form"] for a in one["actions"][1:]] == ["f0re1gn9", "Foreign 9"]
 
 
 @needs_databases
@@ -775,15 +776,17 @@ def test_a_held_car_whose_register_did_not_answer_keeps_its_rows_and_nothing_is_
     previous run, beside one stale row. After the run: billing still holds
     LIVE-1 at both garages, billing's own barrier answers COVERED at both,
     the stale row is still there (nothing was released), exit 1 with the
-    finding; the next run, real door throughout, converges."""
+    finding; the next run, real door throughout, converges. garage-pass
+    hands LIVE-1 out in its one normal form, L1VE1 (I read as 1), so that is
+    what the previous run registered and what billing is asked about."""
     import shutil
     import subprocess
 
     standard_world(pair)
     pair.gp_register("pass-1", "garage-a", "LIVE-1", "2026-09-01")
-    pair.mb_register("ag-1", "LIVE-1", AT)
+    pair.mb_register("ag-1", "L1VE1", AT)
     pair.mb_register("ag-1", "old1", AT)
-    held = {("garage-a", "live1"), ("garage-b", "LIVE-1"), ("garage-a", "old1"),
+    held = {("garage-a", "l1ve1"), ("garage-b", "L1VE1"), ("garage-a", "0ld1"),
             ("garage-b", "old1")}
     assert pair.mb_rows("ag-1") == held
 
@@ -808,7 +811,7 @@ def test_a_held_car_whose_register_did_not_answer_keeps_its_rows_and_nothing_is_
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     def covered(garage: str) -> str:
-        done = pair.mb_run("covered-in-store", "--garage", garage, "--vehicle", "LIVE-1",
+        done = pair.mb_run("covered-in-store", "--garage", garage, "--vehicle", "L1VE1",
                            "--at", AT, check=False)
         return done.stdout.split()[0]
 
@@ -817,31 +820,31 @@ def test_a_held_car_whose_register_did_not_answer_keeps_its_rows_and_nothing_is_
     assert code == 1, err
     (one,) = report["links"]
     (reg,) = [a for a in one["actions"] if a["action"] == "register"]
-    assert reg["identity"] == "LIVE-1" and reg["outcome"] == answer
+    assert reg["identity"] == "L1VE1" and reg["outcome"] == answer
     assert [a for a in one["actions"] if a["action"] == "release"] == []
     (unknown,) = [f for f in one["findings"] if f["code"] == "STORED_FORM_UNKNOWN"]
-    assert unknown["identity"] == "LIVE-1" and reg["detail"] in unknown["detail"]
+    assert unknown["identity"] == "L1VE1" and reg["detail"] in unknown["detail"]
     assert one["converged"] is False
     assert pair.mb_rows("ag-1") == held
     assert (covered("garage-a"), covered("garage-b")) == ("COVERED", "COVERED")
-    # The kept rows -- LIVE-1's own two and the stale two alike -- are each
+    # The kept rows -- L1VE1's own two and the stale two alike -- are each
     # named, and none is called a row the pass stores nothing in: the run
-    # learned no form for LIVE-1 and says exactly that on every one.
+    # learned no form for L1VE1 and says exactly that on every one.
     rows = [f for f in one["findings"] if f["code"] == "DIVERGENCE"]
     assert sorted((f["garage"], f["form"]) for f in rows) == sorted(held)
     for row in rows:
-        assert row["side"] == "billing_only" and row["identities"] == ["LIVE-1"]
+        assert row["side"] == "billing_only" and row["identities"] == ["L1VE1"]
         assert row["detail"] == (f"billing holds {row['form']!r} at {row['garage']!r}; "
-                                 + UNKNOWN.format(ids=["LIVE-1"])), row["detail"]
+                                 + UNKNOWN.format(ids=["L1VE1"])), row["detail"]
         assert FOREIGN not in row["detail"]
 
-    # The next run, the real door throughout: the stale row goes, LIVE-1 stays.
+    # The next run, the real door throughout: the stale row goes, L1VE1 stays.
     monkeypatch.setenv("PATH", os.environ["PATH"].split(":", 1)[1])
     code, report, err = pair.sync_script([pair.link()], AT)
     assert code == 0, err
     assert [(a["action"], a["form"], a["garage"]) for a in report["links"][0]["actions"]] == [
-        ("register", None, None), ("release", "old1", "garage-a"), ("release", "old1", "garage-b")]
-    assert pair.mb_rows("ag-1") == {("garage-a", "live1"), ("garage-b", "LIVE-1")}
+        ("register", None, None), ("release", "0ld1", "garage-a"), ("release", "old1", "garage-b")]
+    assert pair.mb_rows("ag-1") == {("garage-a", "l1ve1"), ("garage-b", "L1VE1")}
     assert (covered("garage-a"), covered("garage-b")) == ("COVERED", "COVERED")
     assert subprocess.run(["which", "monthly-billing"], capture_output=True,
                           text=True).stdout.strip() == real

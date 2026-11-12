@@ -1,9 +1,12 @@
 """C8 -- a collision releases nothing.
 
-§5.4: two live plates on the pass, `AB-123` and `ab123`, fold to ONE stored
-form at garage-a. Releasing either would take out the other, so the link is
-reported (garage, form, both identities), nothing is released for it -- a
-foreign row that would otherwise go stays -- it does not converge, exit 1.
+§5.4: two live plates on the pass, `AB/123` and `AB123`, fold to ONE stored
+form at garage-a. garage-pass holds them as two cars: its one normal form
+takes out spaces, dashes and dots only, so the slash stays, while billing's
+folded rule keeps letters and digits alone. Releasing either would take out
+the other, so the link is reported (garage, form, both identities), nothing
+is released for it -- a foreign row that would otherwise go stays -- it does
+not converge, exit 1.
 """
 
 from __future__ import annotations
@@ -18,8 +21,8 @@ from harness import AT, needs_databases, standard_world
 def test_two_live_plates_one_form_is_a_collision_and_nothing_is_released(pair, monkeypatch):
     standard_world(pair)
     pair.mb_register("ag-1", "Foreign 9")  # would be released on a healthy link
-    pair.gp_register("pass-1", "garage-a", "AB-123", "2026-09-01")
-    pair.gp_register("pass-1", "garage-a", "ab123", "2026-09-01")
+    pair.gp_register("pass-1", "garage-a", "AB/123", "2026-09-01")
+    pair.gp_register("pass-1", "garage-a", "AB123", "2026-09-01")
     code, report = pair.sync([pair.link()], AT, monkeypatch=monkeypatch)
     assert code == 1
     (one,) = report["links"]
@@ -29,10 +32,10 @@ def test_two_live_plates_one_form_is_a_collision_and_nothing_is_released(pair, m
     assert len(collisions) == 1
     (collision,) = collisions
     assert collision["garage"] == "garage-a" and collision["form"] == "ab123"
-    assert collision["identities"] == ["AB-123", "ab123"]
+    assert collision["identities"] == ["AB/123", "AB123"]
     # Nothing released: the foreign row is still there, and so are both cars.
-    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB-123"),
-                                    ("garage-b", "ab123"), ("garage-a", "foreign9"),
+    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB/123"),
+                                    ("garage-b", "AB123"), ("garage-a", "f0re1gn9"),
                                     ("garage-b", "Foreign 9")}
 
 
@@ -48,8 +51,8 @@ def test_the_same_two_plates_at_the_exact_garage_alone_are_not_a_collision(pair,
 
     pair.mb_seed(tuple(mb_garage(g, z, r) for g, z, r in (GARAGE_A, GARAGE_B)),
                  (mb_agreement("ag-1", "garage-b", ("garage-b",)),))
-    pair.gp_register("pass-1", "garage-b", "AB-123", "2026-09-01")
-    pair.gp_register("pass-1", "garage-b", "ab123", "2026-09-01")
+    pair.gp_register("pass-1", "garage-b", "AB/123", "2026-09-01")
+    pair.gp_register("pass-1", "garage-b", "AB123", "2026-09-01")
     code, report = pair.sync([pair.link(pass_garage="garage-b")], AT, monkeypatch=monkeypatch)
     assert code == 0, report
-    assert pair.mb_rows("ag-1") == {("garage-b", "AB-123"), ("garage-b", "ab123")}
+    assert pair.mb_rows("ag-1") == {("garage-b", "AB/123"), ("garage-b", "AB123")}

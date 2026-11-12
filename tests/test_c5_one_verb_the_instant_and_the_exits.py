@@ -97,7 +97,7 @@ def test_the_day_as_written_decides_which_rows_are_live(pair, monkeypatch):
     assert pair.mb_rows("ag-1") == set()
     code, report = pair.sync([pair.link()], "2026-09-17T00:30:00+09:00", monkeypatch=monkeypatch)
     assert code == 0 and report["day"] == "2026-09-17"
-    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB-123")}
+    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB123")}
 
 
 @needs_databases
@@ -126,4 +126,4 @@ def test_links_are_independent_one_broken_the_other_converges(pair, monkeypatch)
     assert {f["code"] for f in first["findings"]} == {"GARAGE_PASS_REFUSED",
                                                      "MONTHLY_BILLING_REFUSED"}
     assert second["converged"] is True
-    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB-123")}
+    assert pair.mb_rows("ag-1") == {("garage-a", "ab123"), ("garage-b", "AB123")}

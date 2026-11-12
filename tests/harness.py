@@ -302,10 +302,14 @@ class Pair:
                     "--by", "the harness", "--at", "2026-01-01T00:00:00+00:00",
                     "--reason", "the fixture")
 
-    def gp_issue_qr(self, pass_id: str, garage: str, qr: str, starts_on: str) -> str:
-        """A QR for the pass, through issue-enrolment; returns its token."""
+    def gp_issue_qr(self, pass_id: str, garage: str, qr: str, starts_on: str,
+                    plate: str) -> str:
+        """A QR for the pass, through issue-enrolment, made for one car's plate
+        (garage-pass requires it: the QR is bound to the plate from issue);
+        returns its token."""
         done = self.gp_run("issue-enrolment", "--garage", garage, "--pass-id", pass_id,
                            "--enrolment-id", qr, "--starts-on", starts_on, "--days-valid", "30",
+                           "--plate", plate,
                            "--by", "the harness", "--at", f"{starts_on}T08:00:00-06:00")
         return json.loads(done.stdout)["token"]
 
@@ -316,11 +320,13 @@ class Pair:
                                       "--vehicle", identity, "--lane", "L1", "--direction",
                                       "entry", "--at", at).stdout)
 
-    def gp_replace_car(self, garage: str, qr: str, new_qr: str, starts_on: str) -> str:
-        """replace-car: the old QR exit only, a new QR on the same pass; returns
-        the new QR's token."""
+    def gp_replace_car(self, garage: str, qr: str, new_qr: str, starts_on: str,
+                       plate: str) -> str:
+        """replace-car: the old QR exit only, a new QR on the same pass made for
+        the replacement car's plate; returns the new QR's token."""
         done = self.gp_run("replace-car", "--garage", garage, "--enrolment-id", qr,
-                           "--new-enrolment-id", new_qr, "--starts-on", starts_on,
+                           "--new-enrolment-id", new_qr, "--plate", plate,
+                           "--starts-on", starts_on,
                            "--days-valid", "30", "--by", "the harness",
                            "--reason", "rental swapped", "--at", f"{starts_on}T08:00:00-06:00")
         return json.loads(done.stdout)["new"]["token"]
@@ -413,9 +419,15 @@ class Pair:
             argv += ["--at", at]
         return self.mb_run(*argv, check=check)
 
-    def mb_release(self, agreement: str, identity: str, *, check: bool = True):
-        return self.mb_run("release-vehicle", "--agreement", agreement, "--vehicle", identity,
-                           check=check)
+    def mb_release(self, agreement: str, identity: str, garage: str | None = None, *,
+                   check: bool = True):
+        """release-vehicle. With ``garage`` it reaches that one covered garage
+        alone; without, every covered garage -- which billing refuses, writing
+        nothing, when the text names no single row across them."""
+        argv = ["release-vehicle", "--agreement", agreement, "--vehicle", identity]
+        if garage:
+            argv += ["--garage", garage]
+        return self.mb_run(*argv, check=check)
 
     def mb_rows(self, agreement: str) -> set[tuple[str, str]]:
         register = json.loads(self.mb_run("show-register", "--agreement", agreement).stdout)
